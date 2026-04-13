@@ -49,7 +49,7 @@
     </div>
 
     <script>
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbylS0Rutip4drINrjfYvmpbaWCLspzmg30qryUQnu1-qFcrnAaIUgc7YaKP314Bk-8b/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwuhvHuqA9A5bR8WEEFA9WhDBohFkaOEdydvNrpgohb5bATbycNbUAngRGnYwNcvost/exec";
        
         let participantId = "";
         let userTrials = [];
@@ -105,23 +105,43 @@
 
         // --- DATA & CHARTING ---
 
-        async function finishExperiment() {
-            showScreen('results');
-            const userAvg = userTrials.reduce((a, b) => a + b, 0) / userTrials.length;
+async function finishExperiment() {
+    showScreen('results');
+    const userAvg = userTrials.reduce((a, b) => a + b, 0) / userTrials.length;
 
-            try {
-                // 1. POST current trials to Google Sheets
-                for (const rt of userTrials) {
-                    await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify({
-                            Participant_ID: participantId,
-                            Trial_Number: userTrials.indexOf(rt) + 1,
-                            Reaction_Time: rt
-                        })
-                    });
-                }
+    // Prepare all data into one single array
+    const dataToSend = userTrials.map((rt, index) => ({
+        Participant_ID: participantId,
+        Trial_Number: index + 1,
+        Reaction_Time: rt
+    }));
+
+    try {
+        // Send ALL data in one single POST request
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors', // Keeps the browser from complaining about CORS
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dataToSend) 
+        });
+
+        // Small delay to let the sheet process before fetching historical data
+        setTimeout(async () => {
+            const response = await fetch(WEB_APP_URL);
+            const historicalRTs = await response.json();
+            
+            document.getElementById('status-msg').innerText = `Your Average: ${Math.round(userAvg)}ms`;
+            renderChart(historicalRTs, userAvg);
+        }, 1500);
+
+    } catch (err) {
+        console.error("Fetch error:", err);
+        document.getElementById('status-msg').innerText = "Sync issue. Showing local results.";
+        renderChart(userTrials, userAvg);
+    }
+}
 
                 // 2. GET all historical data
                 const response = await fetch(WEB_APP_URL);
