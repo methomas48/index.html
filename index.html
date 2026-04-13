@@ -45,8 +45,7 @@
         <button onclick="location.reload()">Try Again</button>
     </div>
 
-    <script>
-        // REPLACE THIS URL WITH YOUR DEPLOYED APPS SCRIPT URL
+   <script>
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwuhvHuqA9A5bR8WEEFA9WhDBohFkaOEdydvNrpgohb5bATbycNbUAngRGnYwNcvost/exec";
         
         let participantId = "";
@@ -61,14 +60,17 @@
         };
 
         function showScreen(screenId) {
+            console.log("Switching to screen:", screenId);
             Object.values(screens).forEach(s => s.style.display = 'none');
-            screens[screenId].style.display = 'flex';
+            if (screens[screenId]) {
+                screens[screenId].style.display = 'flex';
+            }
         }
 
-        // --- EXPERIMENT LOGIC ---
         document.getElementById('start-btn').addEventListener('click', () => {
-            participantId = document.getElementById('participant-id').value.trim() ||
-                            "User_" + Math.random().toString(36).substring(2, 8).toUpperCase();
+            console.log("Start button clicked");
+            const inputVal = document.getElementById('participant-id').value.trim();
+            participantId = inputVal || "User_" + Math.random().toString(36).substring(2, 8).toUpperCase();
             showScreen('task');
             runTrial();
         });
@@ -78,6 +80,7 @@
             target.style.display = 'none';
 
             if (userTrials.length >= maxTrials) {
+                console.log("Experiment finished, trials:", userTrials);
                 finishExperiment();
                 return;
             }
@@ -97,10 +100,10 @@
         document.getElementById('target').addEventListener('mousedown', () => {
             const rt = Math.round(performance.now() - startTime);
             userTrials.push(rt);
+            console.log("Trial recorded:", rt);
             runTrial();
         });
 
-        // --- DATA & CHARTING ---
         async function finishExperiment() {
             showScreen('results');
             const userAvg = userTrials.reduce((a, b) => a + b, 0) / userTrials.length;
@@ -112,7 +115,7 @@
             }));
 
             try {
-                // 1. POST current trials to Google Sheets
+                console.log("Sending data to Google...");
                 await fetch(WEB_APP_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -120,8 +123,8 @@
                     body: JSON.stringify(dataToSend)
                 });
 
-                // 2. Wait a second, then GET historical data
                 setTimeout(async () => {
+                    console.log("Fetching historical data...");
                     const response = await fetch(WEB_APP_URL);
                     const historicalRTs = await response.json();
                     document.getElementById('status-msg').innerText = `Your Average: ${Math.round(userAvg)}ms`;
@@ -129,18 +132,18 @@
                 }, 1500);
 
             } catch (err) {
-                console.error(err);
+                console.error("Data sync error:", err);
                 document.getElementById('status-msg').innerText = "Sync issue. Showing local results.";
                 renderChart(userTrials, userAvg);
             }
         }
 
         function renderChart(allData, userAvg) {
+            console.log("Rendering chart with", allData.length, "data points");
             const ctx = document.getElementById('rtChart').getContext('2d');
             const binSize = 50;
             const bins = {};
             
-            // Handle empty data case
             if (!allData || allData.length === 0) allData = userTrials;
 
             allData.forEach(val => {
@@ -165,28 +168,8 @@
                 },
                 options: {
                     responsive: true,
-                    plugins: { title: { display: true, text: 'Global Reaction Time Distribution' } },
-                    scales: { y: { beginAtZero: true } }
-                },
-                plugins: [{
-                    afterDraw: (chart) => {
-                        const {ctx, scales: {x, y}} = chart;
-                        const binIndex = labels.findIndex(l => userAvg < parseInt(l) + binSize);
-                        const xPos = x.getPixelForValue(binIndex !== -1 ? binIndex : labels.length - 1);
-                        
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.lineWidth = 3;
-                        ctx.strokeStyle = '#ff4757';
-                        ctx.moveTo(xPos, y.top);
-                        ctx.lineTo(xPos, y.bottom);
-                        ctx.stroke();
-                        ctx.fillStyle = '#ff4757';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('YOU', xPos, y.top - 5);
-                        ctx.restore();
-                    }
-                }]
+                    plugins: { title: { display: true, text: 'Global Reaction Time Distribution' } }
+                }
             });
         }
     </script>
